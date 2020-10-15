@@ -1,0 +1,65 @@
+{
+  "vpc-provider:account=187756688051:filter.vpc-id=vpc-0273272dc737d6bf3:region=ap-northeast-1:returnAsymmetricSubnets=true": {
+    "vpcId": "vpc-0273272dc737d6bf3",
+    "vpcCidrBlock": "10.3.0.0/16",
+    "availabilityZones": [],
+    "subnetGroups": [
+      {
+        "name": "Public",
+        "type": "Public",
+        "subnets": [
+          {
+            "subnetId": "subnet-0d7b200ed26e9f5d4",
+            "cidr": "10.3.0.0/24",
+            "availabilityZone": "ap-northeast-1a",
+            "routeTableId": "rtb-07a2bde8bc769ae8d"
+          },
+          {
+            "subnetId": "subnet-089e25c11e98534c0",
+            "cidr": "10.3.1.0/24",
+            "availabilityZone": "ap-northeast-1c",
+            "routeTableId": "rtb-08a954acb425a8886"
+          }
+        ]
+      }
+    ]
+  },
+  "hosted-zone:account=187756688051:domainName=demo.lycle-line.jp.:region=ap-northeast-1": {
+    "Id": "/hostedzone/Z026727813EDCDZAQ2SY1",
+    "Name": "demo.lycle-line.jp."
+  },
+  "vpc-provider:account=992664807309:filter.vpc-id=vpc-0dde93a128e6e0ff6:region=ap-northeast-1:returnAsymmetricSubnets=true": {
+    "vpcId": "vpc-0dde93a128e6e0ff6",
+    "vpcCidrBlock": "10.3.0.0/16",
+    "availabilityZones": [],
+    "subnetGroups": [
+      {
+        "name": "Public",
+        "type": "Public",
+        "subnets": [
+          {
+            "subnetId": "subnet-05574cf1a3db91b95",
+            "cidr": "10.3.0.0/24",
+            "availabilityZone": "ap-northeast-1a",
+            "routeTableId": "rtb-07666f29f7f709dd9"
+          },
+          {
+            "subnetId": "subnet-07caec3fcee240a2c",
+            "cidr": "10.3.1.0/24",
+            "availabilityZone": "ap-northeast-1c",
+            "routeTableId": "rtb-095aade8ff31958b0"
+          }
+        ]
+      }
+    ]
+  },
+  "hosted-zone:account=992664807309:domainName=otera05.xyz.:region=ap-northeast-1": {
+    "Id": "/hostedzone/ZT3GTRHZDFLCN",
+    "Name": "otera05.xyz."
+  },
+  "availability-zones:account=992664807309:region=ap-northeast-1": [
+    "ap-northeast-1a",
+    "ap-northeast-1c",
+    "ap-northeast-1d"
+  ]
+}

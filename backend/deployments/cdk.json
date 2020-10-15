@@ -1,0 +1,69 @@
+{
+  "app": "npx ts-node bin/deployments.ts",
+  "context": {
+    "Demo": {
+      "network": {
+        "vpcName": "vpc-0dde93a128e6e0ff6",
+        "publicSubnets": [
+          {
+            "subnetId": "subnet-05574cf1a3db91b95",
+            "availabilityZone": "ap-northeast-1a",
+            "routeTableId": "rtb-07666f29f7f709dd9"
+          },
+          {
+            "subnetId": "subnet-07caec3fcee240a2c",
+            "availabilityZone": "ap-northeast-1c",
+            "routeTableId": "rtb-095aade8ff31958b0"
+          }
+        ],
+        "securityGroup": {
+          "id": "sg-082221e701d075c6b",
+          "name": "todon-party-ecs"
+        },
+        "targetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-1:187756688051:targetgroup/todon-party-alb-tg/5984703f89da9ff8"
+      },
+      "container": {
+        "hostPort": 8080,
+        "containerPort": 8080,
+        "memoryLimitMiB": 256,
+        "cpu": 256,
+        "desiredCount": 1,
+        "imageName": "todon-party",
+        "assignPublicIp": true,
+        "env": {}
+      },
+      "loadBalancer": {
+        "alb": {
+          "id": "todon-party-alb",
+          "name": "todon-party-alb"
+        },
+        "targetGroup": {
+          "healthCheck": {
+            "statusCode": "200"
+          },
+          "port": 80,
+          "name": "todon-party-alb-tg"
+        },
+        "listener": {
+          "http": {
+            "id": "todon-party-listener-http",
+            "port": 80
+          },
+          "https": {
+            "id": "todon-party-listener-https",
+            "port": 443,
+            "certificateArn": "arn:aws:acm:ap-northeast-1:992664807309:certificate/138332ce-373f-4224-811b-1a97e1d239e3"
+          }
+        }
+      },
+      "route53": {
+        "id": "todon-party-alb-Route53",
+        "fqdn": "todon-party-api.otera05.xyz",
+        "hostedZone": {
+          "id": "otera05.xyz",
+          "domainName": "otera05.xyz."
+        }
+      }
+    }
+  }
+}

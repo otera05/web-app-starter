@@ -1,0 +1,928 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`Snapshot Test 1`] = `
+Object {
+  "Parameters": Object {
+    "SsmParameterValueawsserviceecsoptimizedamiamazonlinux2recommendedimageidC96584B6F00A464EAD1953AFF4B05118Parameter": Object {
+      "Default": "/aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id",
+      "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+    },
+  },
+  "Resources": Object {
+    "ClusterDfaultAutoScalingGroupASG6B552B66": Object {
+      "Properties": Object {
+        "LaunchConfigurationName": Object {
+          "Ref": "ClusterDfaultAutoScalingGroupLaunchConfigB3C1FC71",
+        },
+        "MaxSize": "1",
+        "MinSize": "1",
+        "Tags": Array [
+          Object {
+            "Key": "Name",
+            "PropagateAtLaunch": true,
+            "Value": "TestStack/Cluster/DfaultAutoScalingGroup",
+          },
+        ],
+        "VPCZoneIdentifier": Array [
+          "p-12345",
+          "p-67890",
+        ],
+      },
+      "Type": "AWS::AutoScaling::AutoScalingGroup",
+      "UpdatePolicy": Object {
+        "AutoScalingReplacingUpdate": Object {
+          "WillReplace": true,
+        },
+        "AutoScalingScheduledAction": Object {
+          "IgnoreUnmodifiedGroupSizeProperties": true,
+        },
+      },
+    },
+    "ClusterDfaultAutoScalingGroupDrainECSHookFunctionAllowInvokeTestStackClusterDfaultAutoScalingGroupLifecycleHookDrainHookTopic0BF7643FE96630A7": Object {
+      "Properties": Object {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": Object {
+          "Fn::GetAtt": Array [
+            "ClusterDfaultAutoScalingGroupDrainECSHookFunctionCA96E55C",
+            "Arn",
+          ],
+        },
+        "Principal": "sns.amazonaws.com",
+        "SourceArn": Object {
+          "Ref": "ClusterDfaultAutoScalingGroupLifecycleHookDrainHookTopic82B8821C",
+        },
+      },
+      "Type": "AWS::Lambda::Permission",
+    },
+    "ClusterDfaultAutoScalingGroupDrainECSHookFunctionCA96E55C": Object {
+      "DependsOn": Array [
+        "ClusterDfaultAutoScalingGroupDrainECSHookFunctionServiceRoleDefaultPolicy375E9C2E",
+        "ClusterDfaultAutoScalingGroupDrainECSHookFunctionServiceRoleF8471D91",
+      ],
+      "Properties": Object {
+        "Code": Object {
+          "ZipFile": "import boto3, json, os, time
+
+ecs = boto3.client('ecs')
+autoscaling = boto3.client('autoscaling')
+
+
+def lambda_handler(event, context):
+  print(json.dumps(event))
+  cluster = os.environ['CLUSTER']
+  snsTopicArn = event['Records'][0]['Sns']['TopicArn']
+  lifecycle_event = json.loads(event['Records'][0]['Sns']['Message'])
+  instance_id = lifecycle_event.get('EC2InstanceId')
+  if not instance_id:
+    print('Got event without EC2InstanceId: %s', json.dumps(event))
+    return
+
+  instance_arn = container_instance_arn(cluster, instance_id)
+  print('Instance %s has container instance ARN %s' % (lifecycle_event['EC2InstanceId'], instance_arn))
+
+  if not instance_arn:
+    return
+
+  while has_tasks(cluster, instance_arn):
+    time.sleep(10)
+
+  try:
+    print('Terminating instance %s' % instance_id)
+    autoscaling.complete_lifecycle_action(
+        LifecycleActionResult='CONTINUE',
+        **pick(lifecycle_event, 'LifecycleHookName', 'LifecycleActionToken', 'AutoScalingGroupName'))
+  except Exception as e:
+    # Lifecycle action may have already completed.
+    print(str(e))
+
+
+def container_instance_arn(cluster, instance_id):
+  \\"\\"\\"Turn an instance ID into a container instance ARN.\\"\\"\\"
+  arns = ecs.list_container_instances(cluster=cluster, filter='ec2InstanceId==' + instance_id)['containerInstanceArns']
+  if not arns:
+    return None
+  return arns[0]
+
+
+def has_tasks(cluster, instance_arn):
+  \\"\\"\\"Return True if the instance is running tasks for the given cluster.\\"\\"\\"
+  instances = ecs.describe_container_instances(cluster=cluster, containerInstances=[instance_arn])['containerInstances']
+  if not instances:
+    return False
+  instance = instances[0]
+
+  if instance['status'] == 'ACTIVE':
+    # Start draining, then try again later
+    set_container_instance_to_draining(cluster, instance_arn)
+    return True
+
+  tasks = instance['runningTasksCount'] + instance['pendingTasksCount']
+  print('Instance %s has %s tasks' % (instance_arn, tasks))
+
+  return tasks > 0
+
+
+def set_container_instance_to_draining(cluster, instance_arn):
+  ecs.update_container_instances_state(
+      cluster=cluster,
+      containerInstances=[instance_arn], status='DRAINING')
+
+
+def pick(dct, *keys):
+  \\"\\"\\"Pick a subset of a dict.\\"\\"\\"
+  return {k: v for k, v in dct.items() if k in keys}
+",
+        },
+        "Environment": Object {
+          "Variables": Object {
+            "CLUSTER": Object {
+              "Ref": "ClusterEB0386A7",
+            },
+          },
+        },
+        "Handler": "index.lambda_handler",
+        "Role": Object {
+          "Fn::GetAtt": Array [
+            "ClusterDfaultAutoScalingGroupDrainECSHookFunctionServiceRoleF8471D91",
+            "Arn",
+          ],
+        },
+        "Runtime": "python3.6",
+        "Tags": Array [
+          Object {
+            "Key": "Name",
+            "Value": "TestStack/Cluster/DfaultAutoScalingGroup",
+          },
+        ],
+        "Timeout": 310,
+      },
+      "Type": "AWS::Lambda::Function",
+    },
+    "ClusterDfaultAutoScalingGroupDrainECSHookFunctionServiceRoleDefaultPolicy375E9C2E": Object {
+      "Properties": Object {
+        "PolicyDocument": Object {
+          "Statement": Array [
+            Object {
+              "Action": Array [
+                "ec2:DescribeInstances",
+                "ec2:DescribeInstanceAttribute",
+                "ec2:DescribeInstanceStatus",
+                "ec2:DescribeHosts",
+              ],
+              "Effect": "Allow",
+              "Resource": "*",
+            },
+            Object {
+              "Action": "autoscaling:CompleteLifecycleAction",
+              "Effect": "Allow",
+              "Resource": Object {
+                "Fn::Join": Array [
+                  "",
+                  Array [
+                    "arn:",
+                    Object {
+                      "Ref": "AWS::Partition",
+                    },
+                    ":autoscaling:ap-northeast-1:000000000000:autoScalingGroup:*:autoScalingGroupName/",
+                    Object {
+                      "Ref": "ClusterDfaultAutoScalingGroupASG6B552B66",
+                    },
+                  ],
+                ],
+              },
+            },
+            Object {
+              "Action": Array [
+                "ecs:DescribeContainerInstances",
+                "ecs:DescribeTasks",
+              ],
+              "Condition": Object {
+                "ArnEquals": Object {
+                  "ecs:cluster": Object {
+                    "Fn::GetAtt": Array [
+                      "ClusterEB0386A7",
+                      "Arn",
+                    ],
+                  },
+                },
+              },
+              "Effect": "Allow",
+              "Resource": "*",
+            },
+            Object {
+              "Action": Array [
+                "ecs:ListContainerInstances",
+                "ecs:SubmitContainerStateChange",
+                "ecs:SubmitTaskStateChange",
+              ],
+              "Effect": "Allow",
+              "Resource": Object {
+                "Fn::GetAtt": Array [
+                  "ClusterEB0386A7",
+                  "Arn",
+                ],
+              },
+            },
+            Object {
+              "Action": Array [
+                "ecs:UpdateContainerInstancesState",
+                "ecs:ListTasks",
+              ],
+              "Condition": Object {
+                "ArnEquals": Object {
+                  "ecs:cluster": Object {
+                    "Fn::GetAtt": Array [
+                      "ClusterEB0386A7",
+                      "Arn",
+                    ],
+                  },
+                },
+              },
+              "Effect": "Allow",
+              "Resource": "*",
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "PolicyName": "ClusterDfaultAutoScalingGroupDrainECSHookFunctionServiceRoleDefaultPolicy375E9C2E",
+        "Roles": Array [
+          Object {
+            "Ref": "ClusterDfaultAutoScalingGroupDrainECSHookFunctionServiceRoleF8471D91",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Policy",
+    },
+    "ClusterDfaultAutoScalingGroupDrainECSHookFunctionServiceRoleF8471D91": Object {
+      "Properties": Object {
+        "AssumeRolePolicyDocument": Object {
+          "Statement": Array [
+            Object {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": Object {
+                "Service": "lambda.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "ManagedPolicyArns": Array [
+          Object {
+            "Fn::Join": Array [
+              "",
+              Array [
+                "arn:",
+                Object {
+                  "Ref": "AWS::Partition",
+                },
+                ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+              ],
+            ],
+          },
+        ],
+        "Tags": Array [
+          Object {
+            "Key": "Name",
+            "Value": "TestStack/Cluster/DfaultAutoScalingGroup",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "ClusterDfaultAutoScalingGroupDrainECSHookFunctionTopicEE382B3B": Object {
+      "Properties": Object {
+        "Endpoint": Object {
+          "Fn::GetAtt": Array [
+            "ClusterDfaultAutoScalingGroupDrainECSHookFunctionCA96E55C",
+            "Arn",
+          ],
+        },
+        "Protocol": "lambda",
+        "TopicArn": Object {
+          "Ref": "ClusterDfaultAutoScalingGroupLifecycleHookDrainHookTopic82B8821C",
+        },
+      },
+      "Type": "AWS::SNS::Subscription",
+    },
+    "ClusterDfaultAutoScalingGroupInstanceProfileF72C4360": Object {
+      "Properties": Object {
+        "Roles": Array [
+          Object {
+            "Ref": "ClusterDfaultAutoScalingGroupInstanceRole4DA8A609",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::InstanceProfile",
+    },
+    "ClusterDfaultAutoScalingGroupInstanceRole4DA8A609": Object {
+      "Properties": Object {
+        "AssumeRolePolicyDocument": Object {
+          "Statement": Array [
+            Object {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": Object {
+                "Service": "ec2.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "Tags": Array [
+          Object {
+            "Key": "Name",
+            "Value": "TestStack/Cluster/DfaultAutoScalingGroup",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "ClusterDfaultAutoScalingGroupInstanceRoleDefaultPolicy57ECA23C": Object {
+      "Properties": Object {
+        "PolicyDocument": Object {
+          "Statement": Array [
+            Object {
+              "Action": Array [
+                "ecs:DeregisterContainerInstance",
+                "ecs:RegisterContainerInstance",
+                "ecs:Submit*",
+              ],
+              "Effect": "Allow",
+              "Resource": Object {
+                "Fn::GetAtt": Array [
+                  "ClusterEB0386A7",
+                  "Arn",
+                ],
+              },
+            },
+            Object {
+              "Action": Array [
+                "ecs:Poll",
+                "ecs:StartTelemetrySession",
+              ],
+              "Condition": Object {
+                "ArnEquals": Object {
+                  "ecs:cluster": Object {
+                    "Fn::GetAtt": Array [
+                      "ClusterEB0386A7",
+                      "Arn",
+                    ],
+                  },
+                },
+              },
+              "Effect": "Allow",
+              "Resource": "*",
+            },
+            Object {
+              "Action": Array [
+                "ecs:DiscoverPollEndpoint",
+                "ecr:GetAuthorizationToken",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents",
+              ],
+              "Effect": "Allow",
+              "Resource": "*",
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "PolicyName": "ClusterDfaultAutoScalingGroupInstanceRoleDefaultPolicy57ECA23C",
+        "Roles": Array [
+          Object {
+            "Ref": "ClusterDfaultAutoScalingGroupInstanceRole4DA8A609",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Policy",
+    },
+    "ClusterDfaultAutoScalingGroupInstanceSecurityGroupEDA68D19": Object {
+      "Properties": Object {
+        "GroupDescription": "TestStack/Cluster/DfaultAutoScalingGroup/InstanceSecurityGroup",
+        "SecurityGroupEgress": Array [
+          Object {
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow all outbound traffic by default",
+            "IpProtocol": "-1",
+          },
+        ],
+        "Tags": Array [
+          Object {
+            "Key": "Name",
+            "Value": "TestStack/Cluster/DfaultAutoScalingGroup",
+          },
+        ],
+        "VpcId": "vpc-12345",
+      },
+      "Type": "AWS::EC2::SecurityGroup",
+    },
+    "ClusterDfaultAutoScalingGroupInstanceSecurityGroupfromTestStacksgsgsgsgsgsgsgsgsgEE58A620808097C6F85C": Object {
+      "Properties": Object {
+        "Description": "Load balancer to target",
+        "FromPort": 8080,
+        "GroupId": Object {
+          "Fn::GetAtt": Array [
+            "ClusterDfaultAutoScalingGroupInstanceSecurityGroupEDA68D19",
+            "GroupId",
+          ],
+        },
+        "IpProtocol": "tcp",
+        "SourceSecurityGroupId": Object {
+          "Fn::GetAtt": Array [
+            "sgsgsgsgsgsgsgsgsgE59A4C17",
+            "GroupId",
+          ],
+        },
+        "ToPort": 8080,
+      },
+      "Type": "AWS::EC2::SecurityGroupIngress",
+    },
+    "ClusterDfaultAutoScalingGroupLaunchConfigB3C1FC71": Object {
+      "DependsOn": Array [
+        "ClusterDfaultAutoScalingGroupInstanceRoleDefaultPolicy57ECA23C",
+        "ClusterDfaultAutoScalingGroupInstanceRole4DA8A609",
+      ],
+      "Properties": Object {
+        "IamInstanceProfile": Object {
+          "Ref": "ClusterDfaultAutoScalingGroupInstanceProfileF72C4360",
+        },
+        "ImageId": Object {
+          "Ref": "SsmParameterValueawsserviceecsoptimizedamiamazonlinux2recommendedimageidC96584B6F00A464EAD1953AFF4B05118Parameter",
+        },
+        "InstanceType": "t3.micro",
+        "SecurityGroups": Array [
+          Object {
+            "Fn::GetAtt": Array [
+              "ClusterDfaultAutoScalingGroupInstanceSecurityGroupEDA68D19",
+              "GroupId",
+            ],
+          },
+        ],
+        "UserData": Object {
+          "Fn::Base64": Object {
+            "Fn::Join": Array [
+              "",
+              Array [
+                "#!/bin/bash
+echo ECS_CLUSTER=",
+                Object {
+                  "Ref": "ClusterEB0386A7",
+                },
+                " >> /etc/ecs/ecs.config
+sudo iptables --insert FORWARD 1 --in-interface docker+ --destination 169.254.169.254/32 --jump DROP
+sudo service iptables save
+echo ECS_AWSVPC_BLOCK_IMDS=true >> /etc/ecs/ecs.config",
+              ],
+            ],
+          },
+        },
+      },
+      "Type": "AWS::AutoScaling::LaunchConfiguration",
+    },
+    "ClusterDfaultAutoScalingGroupLifecycleHookDrainHookB5F0D820": Object {
+      "DependsOn": Array [
+        "ClusterDfaultAutoScalingGroupLifecycleHookDrainHookRoleDefaultPolicy1F5DF8A3",
+        "ClusterDfaultAutoScalingGroupLifecycleHookDrainHookRole47474290",
+      ],
+      "Properties": Object {
+        "AutoScalingGroupName": Object {
+          "Ref": "ClusterDfaultAutoScalingGroupASG6B552B66",
+        },
+        "DefaultResult": "CONTINUE",
+        "HeartbeatTimeout": 300,
+        "LifecycleTransition": "autoscaling:EC2_INSTANCE_TERMINATING",
+        "NotificationTargetARN": Object {
+          "Ref": "ClusterDfaultAutoScalingGroupLifecycleHookDrainHookTopic82B8821C",
+        },
+        "RoleARN": Object {
+          "Fn::GetAtt": Array [
+            "ClusterDfaultAutoScalingGroupLifecycleHookDrainHookRole47474290",
+            "Arn",
+          ],
+        },
+      },
+      "Type": "AWS::AutoScaling::LifecycleHook",
+    },
+    "ClusterDfaultAutoScalingGroupLifecycleHookDrainHookRole47474290": Object {
+      "Properties": Object {
+        "AssumeRolePolicyDocument": Object {
+          "Statement": Array [
+            Object {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": Object {
+                "Service": "autoscaling.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "Tags": Array [
+          Object {
+            "Key": "Name",
+            "Value": "TestStack/Cluster/DfaultAutoScalingGroup",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "ClusterDfaultAutoScalingGroupLifecycleHookDrainHookRoleDefaultPolicy1F5DF8A3": Object {
+      "Properties": Object {
+        "PolicyDocument": Object {
+          "Statement": Array [
+            Object {
+              "Action": "sns:Publish",
+              "Effect": "Allow",
+              "Resource": Object {
+                "Ref": "ClusterDfaultAutoScalingGroupLifecycleHookDrainHookTopic82B8821C",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "PolicyName": "ClusterDfaultAutoScalingGroupLifecycleHookDrainHookRoleDefaultPolicy1F5DF8A3",
+        "Roles": Array [
+          Object {
+            "Ref": "ClusterDfaultAutoScalingGroupLifecycleHookDrainHookRole47474290",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Policy",
+    },
+    "ClusterDfaultAutoScalingGroupLifecycleHookDrainHookTopic82B8821C": Object {
+      "Properties": Object {
+        "Tags": Array [
+          Object {
+            "Key": "Name",
+            "Value": "TestStack/Cluster/DfaultAutoScalingGroup",
+          },
+        ],
+      },
+      "Type": "AWS::SNS::Topic",
+    },
+    "ClusterEB0386A7": Object {
+      "Properties": Object {
+        "ClusterName": "TestStack",
+      },
+      "Type": "AWS::ECS::Cluster",
+    },
+    "EC2Service5392EF94": Object {
+      "DependsOn": Array [
+        "demominiappalbdemominiapplistenerhttpECSGroup3E0BBD49",
+        "demominiappalbdemominiapplistenerhttp9DE3952B",
+        "demominiappalbdemominiapplistenerhttpsECSGroup06018B2D",
+        "demominiappalbdemominiapplistenerhttpsF1D9504D",
+      ],
+      "Properties": Object {
+        "Cluster": Object {
+          "Ref": "ClusterEB0386A7",
+        },
+        "DeploymentConfiguration": Object {
+          "MaximumPercent": 200,
+          "MinimumHealthyPercent": 50,
+        },
+        "DesiredCount": 1,
+        "EnableECSManagedTags": false,
+        "HealthCheckGracePeriodSeconds": 60,
+        "LaunchType": "EC2",
+        "LoadBalancers": Array [
+          Object {
+            "ContainerName": "mini-app",
+            "ContainerPort": 8080,
+            "TargetGroupArn": Object {
+              "Ref": "demominiappalbdemominiapplistenerhttpECSGroup3E0BBD49",
+            },
+          },
+          Object {
+            "ContainerName": "mini-app",
+            "ContainerPort": 8080,
+            "TargetGroupArn": Object {
+              "Ref": "demominiappalbdemominiapplistenerhttpsECSGroup06018B2D",
+            },
+          },
+        ],
+        "SchedulingStrategy": "REPLICA",
+        "ServiceName": "TestStack",
+        "TaskDefinition": Object {
+          "Ref": "TestStackD2D0B6A9",
+        },
+      },
+      "Type": "AWS::ECS::Service",
+    },
+    "TestStackD2D0B6A9": Object {
+      "Properties": Object {
+        "ContainerDefinitions": Array [
+          Object {
+            "Cpu": 256,
+            "Environment": Array [
+              Object {
+                "Name": "APP_ENV",
+                "Value": "Demo",
+              },
+              Object {
+                "Name": "TZ",
+                "Value": "Asia/Tokyo",
+              },
+            ],
+            "Essential": true,
+            "Image": Object {
+              "Fn::Join": Array [
+                "",
+                Array [
+                  "000000000000.dkr.ecr.ap-northeast-1.",
+                  Object {
+                    "Ref": "AWS::URLSuffix",
+                  },
+                  "/mini-app",
+                ],
+              ],
+            },
+            "LogConfiguration": Object {
+              "LogDriver": "awslogs",
+              "Options": Object {
+                "awslogs-group": Object {
+                  "Ref": "TestStackminiappLogGroup9E6CC2AA",
+                },
+                "awslogs-region": "ap-northeast-1",
+                "awslogs-stream-prefix": "TestStack",
+              },
+            },
+            "Memory": 512,
+            "Name": "mini-app",
+            "PortMappings": Array [
+              Object {
+                "ContainerPort": 8080,
+                "HostPort": 8080,
+                "Protocol": "tcp",
+              },
+            ],
+          },
+        ],
+        "ExecutionRoleArn": Object {
+          "Fn::GetAtt": Array [
+            "TestStackExecutionRole84896236",
+            "Arn",
+          ],
+        },
+        "Family": "TestStack54FA5DC0",
+        "NetworkMode": "bridge",
+        "RequiresCompatibilities": Array [
+          "EC2",
+        ],
+        "TaskRoleArn": Object {
+          "Fn::GetAtt": Array [
+            "TestStackTaskRole90B0C8E1",
+            "Arn",
+          ],
+        },
+      },
+      "Type": "AWS::ECS::TaskDefinition",
+    },
+    "TestStackExecutionRole84896236": Object {
+      "Properties": Object {
+        "AssumeRolePolicyDocument": Object {
+          "Statement": Array [
+            Object {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": Object {
+                "Service": "ecs-tasks.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "TestStackExecutionRoleDefaultPolicyDF90A0C9": Object {
+      "Properties": Object {
+        "PolicyDocument": Object {
+          "Statement": Array [
+            Object {
+              "Action": Array [
+                "ecr:BatchCheckLayerAvailability",
+                "ecr:GetDownloadUrlForLayer",
+                "ecr:BatchGetImage",
+              ],
+              "Effect": "Allow",
+              "Resource": Object {
+                "Fn::Join": Array [
+                  "",
+                  Array [
+                    "arn:",
+                    Object {
+                      "Ref": "AWS::Partition",
+                    },
+                    ":ecr:ap-northeast-1:000000000000:repository/mini-app",
+                  ],
+                ],
+              },
+            },
+            Object {
+              "Action": "ecr:GetAuthorizationToken",
+              "Effect": "Allow",
+              "Resource": "*",
+            },
+            Object {
+              "Action": Array [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents",
+              ],
+              "Effect": "Allow",
+              "Resource": Object {
+                "Fn::GetAtt": Array [
+                  "TestStackminiappLogGroup9E6CC2AA",
+                  "Arn",
+                ],
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "PolicyName": "TestStackExecutionRoleDefaultPolicyDF90A0C9",
+        "Roles": Array [
+          Object {
+            "Ref": "TestStackExecutionRole84896236",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Policy",
+    },
+    "TestStackTaskRole90B0C8E1": Object {
+      "Properties": Object {
+        "AssumeRolePolicyDocument": Object {
+          "Statement": Array [
+            Object {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": Object {
+                "Service": "ecs-tasks.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "TestStackminiappLogGroup9E6CC2AA": Object {
+      "DeletionPolicy": "Retain",
+      "Type": "AWS::Logs::LogGroup",
+      "UpdateReplacePolicy": "Retain",
+    },
+    "demominiappalbD95B215E": Object {
+      "Properties": Object {
+        "LoadBalancerAttributes": Array [
+          Object {
+            "Key": "deletion_protection.enabled",
+            "Value": "false",
+          },
+        ],
+        "Name": "demo-miniapp-alb",
+        "Scheme": "internet-facing",
+        "SecurityGroups": Array [
+          Object {
+            "Fn::GetAtt": Array [
+              "sgsgsgsgsgsgsgsgsgE59A4C17",
+              "GroupId",
+            ],
+          },
+        ],
+        "Subnets": Array [
+          "s-12345",
+          "s-67890",
+        ],
+        "Type": "application",
+      },
+      "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+    },
+    "demominiappalbdemominiapplistenerhttp9DE3952B": Object {
+      "Properties": Object {
+        "DefaultActions": Array [
+          Object {
+            "TargetGroupArn": Object {
+              "Ref": "demominiappalbdemominiapplistenerhttpECSGroup3E0BBD49",
+            },
+            "Type": "forward",
+          },
+        ],
+        "LoadBalancerArn": Object {
+          "Ref": "demominiappalbD95B215E",
+        },
+        "Port": 80,
+        "Protocol": "HTTP",
+      },
+      "Type": "AWS::ElasticLoadBalancingV2::Listener",
+    },
+    "demominiappalbdemominiapplistenerhttpECSGroup3E0BBD49": Object {
+      "Properties": Object {
+        "HealthCheckIntervalSeconds": 60,
+        "HealthCheckPath": "/",
+        "HealthCheckTimeoutSeconds": 5,
+        "Port": 80,
+        "Protocol": "HTTP",
+        "TargetType": "instance",
+        "VpcId": "vpc-12345",
+      },
+      "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+    },
+    "demominiappalbdemominiapplistenerhttpsECSGroup06018B2D": Object {
+      "Properties": Object {
+        "HealthCheckIntervalSeconds": 60,
+        "HealthCheckPath": "/",
+        "HealthCheckTimeoutSeconds": 5,
+        "Port": 80,
+        "Protocol": "HTTP",
+        "TargetType": "instance",
+        "VpcId": "vpc-12345",
+      },
+      "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+    },
+    "demominiappalbdemominiapplistenerhttpsF1D9504D": Object {
+      "Properties": Object {
+        "Certificates": Array [
+          Object {
+            "CertificateArn": "arn:aws:acm:ap-northeast-1:000000000000:certificate/ffffffff-ffff-ffff-ffff-000000000000",
+          },
+        ],
+        "DefaultActions": Array [
+          Object {
+            "TargetGroupArn": Object {
+              "Ref": "demominiappalbdemominiapplistenerhttpsECSGroup06018B2D",
+            },
+            "Type": "forward",
+          },
+        ],
+        "LoadBalancerArn": Object {
+          "Ref": "demominiappalbD95B215E",
+        },
+        "Port": 443,
+        "Protocol": "HTTPS",
+      },
+      "Type": "AWS::ElasticLoadBalancingV2::Listener",
+    },
+    "miniappalbRoute534B2F74E8": Object {
+      "Properties": Object {
+        "AliasTarget": Object {
+          "DNSName": Object {
+            "Fn::Join": Array [
+              "",
+              Array [
+                "dualstack.",
+                Object {
+                  "Fn::GetAtt": Array [
+                    "demominiappalbD95B215E",
+                    "DNSName",
+                  ],
+                },
+              ],
+            ],
+          },
+          "HostedZoneId": Object {
+            "Fn::GetAtt": Array [
+              "demominiappalbD95B215E",
+              "CanonicalHostedZoneID",
+            ],
+          },
+        },
+        "HostedZoneId": "DUMMY",
+        "Name": "api.miniapp.demo.lycle-line.jp.",
+        "Type": "A",
+      },
+      "Type": "AWS::Route53::RecordSet",
+    },
+    "sgsgsgsgsgsgsgsgsgE59A4C17": Object {
+      "Properties": Object {
+        "GroupDescription": "TestStack/sg-sgsgsgsgsgsgsgsg",
+        "GroupName": "test-lycleline-ecs-miniapp",
+        "SecurityGroupEgress": Array [
+          Object {
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow all outbound traffic by default",
+            "IpProtocol": "-1",
+          },
+        ],
+        "SecurityGroupIngress": Array [
+          Object {
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow from anyone on port 80",
+            "FromPort": 80,
+            "IpProtocol": "tcp",
+            "ToPort": 80,
+          },
+          Object {
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow from anyone on port 443",
+            "FromPort": 443,
+            "IpProtocol": "tcp",
+            "ToPort": 443,
+          },
+        ],
+        "VpcId": "vpc-12345",
+      },
+      "Type": "AWS::EC2::SecurityGroup",
+    },
+  },
+}
+`;

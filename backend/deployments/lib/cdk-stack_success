@@ -1,0 +1,440 @@
+import * as cdk from "@aws-cdk/core";
+import * as ec2 from "@aws-cdk/aws-ec2";
+import * as ecs from "@aws-cdk/aws-ecs";
+import * as ecr from "@aws-cdk/aws-ecr";
+import * as iam from "@aws-cdk/aws-iam";
+import * as elbv2 from "@aws-cdk/aws-elasticloadbalancingv2";
+import * as route53 from "@aws-cdk/aws-route53";
+import * as route53Targets from "@aws-cdk/aws-route53-targets";
+import { NetworkMode } from "@aws-cdk/aws-ecs";
+import { Stage } from "@aws-cdk/core";
+
+interface subnetConfig {
+  subnetId: string;
+  availabilityZone: string;
+  routeTableId: string;
+}
+
+interface securityGroupConfig {
+  id: string;
+  name: string;
+}
+
+interface networkConfig {
+  vpcName: string;
+  publicSubnets: subnetConfig[];
+  securityGroup: securityGroupConfig;
+  targetGroupArn: string;
+}
+interface containerConfig {
+  hostPort: number;
+  containerPort: number;
+  memoryLimitMiB: number;
+  cpu: number;
+  desiredCount: number;
+  imageName: string;
+  env: { [key: string]: string };
+  assignPublicIp: boolean;
+}
+
+interface albConfig {
+  id: string;
+  name: string;
+}
+
+interface healthCheckConfig {
+  statusCode: string;
+}
+
+interface targetGroupConfig {
+  healthCheck: healthCheckConfig;
+  port: number;
+  name: string;
+}
+
+interface listenerHttpConfig {
+  id: string;
+  port: number;
+}
+
+interface listenerHttpsConfig {
+  id: string;
+  port: number;
+  certificateArn: string;
+}
+
+interface listenerConfig {
+  http: listenerHttpConfig;
+  https: listenerHttpsConfig;
+}
+
+interface loadBalancerConfig {
+  alb: albConfig;
+  targetGroup: targetGroupConfig;
+  listener: listenerConfig;
+}
+
+interface hostedZoneConfig {
+  id: string;
+  domainName: string;
+}
+
+interface route53Config {
+  id: string;
+  fqdn: string;
+  hostedZone: hostedZoneConfig;
+}
+
+export interface StageContext {
+  description: string;
+  network: networkConfig;
+  container: containerConfig;
+  loadBalancer: loadBalancerConfig;
+  route53: route53Config;
+}
+
+export class CdkStack extends cdk.Stack {
+  constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
+    super(scope, id, props);
+
+    // The code that defines your stack goes here
+    const env: string = this.node.tryGetContext("env") || "Stg";
+    const revision: string = this.node.tryGetContext("revision") || "";
+    const tag: string = this.node.tryGetContext("tag") || "";
+
+    const context: StageContext =
+      env == "Test"
+        ? JSON.parse(this.node.tryGetContext(env))
+        : this.node.tryGetContext(env);
+
+    this.validateEnvironment(env, revision, context);
+
+    // Create a cluster
+    const vpc = new ec2.Vpc(this, "Vpc", { maxAzs: 2 });
+
+    const cluster = new ecs.Cluster(this, "EcsCluster", { vpc });
+    cluster.addCapacity("DefaultAutoScalingGroup", {
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T2,
+        ec2.InstanceSize.MICRO
+      ),
+    });
+
+    // Create Task Definition
+    const taskDefinition = new ecs.Ec2TaskDefinition(this, "TaskDef");
+    const container = taskDefinition.addContainer("web", {
+      image: ecs.ContainerImage.fromRegistry("amazon/amazon-ecs-sample"),
+      memoryLimitMiB: 256,
+    });
+
+    container.addPortMappings({
+      containerPort: 80,
+      hostPort: 8080,
+      protocol: ecs.Protocol.TCP,
+    });
+
+    // Create Service
+    const service = new ecs.Ec2Service(this, "Service", {
+      cluster,
+      taskDefinition,
+    });
+
+    // Create ALB
+    const lb = new elbv2.ApplicationLoadBalancer(this, "LB", {
+      vpc,
+      internetFacing: true,
+    });
+    const listener = lb.addListener("PublicListener", { port: 80, open: true });
+
+    // Attach ALB to ECS Service
+    listener.addTargets("ECS", {
+      port: 80,
+      targets: [
+        service.loadBalancerTarget({
+          containerName: "web",
+          containerPort: 80,
+        }),
+      ],
+      // include health check (default is none)
+      healthCheck: {
+        interval: cdk.Duration.seconds(60),
+        path: "/health",
+        timeout: cdk.Duration.seconds(5),
+      },
+    });
+
+    this.createARecordWithAlb(context.route53, lb);
+  }
+
+  private validateEnvironment(
+    env: string,
+    revision: string,
+    context: StageContext
+  ): void {
+    if (
+      !(
+        context.network &&
+        context.network.vpcName &&
+        context.network.publicSubnets &&
+        context.network.publicSubnets.length > 0 &&
+        context.network.targetGroupArn &&
+        context.network.securityGroup &&
+        ((context.network.securityGroup.id === "" &&
+          context.network.securityGroup.name) ||
+          context.network.securityGroup.id)
+      )
+    ) {
+      throw new Error(
+        `error: invalid network context ${JSON.stringify({
+          env: env,
+          revision: revision,
+          context: context,
+        })}`
+      );
+    }
+    if (
+      !(
+        context.container &&
+        context.container.hostPort > 0 &&
+        context.container.containerPort > 0 &&
+        context.container.memoryLimitMiB > 0 &&
+        context.container.cpu > 0 &&
+        context.container.desiredCount > 0 &&
+        context.container.imageName
+      )
+    ) {
+      throw new Error(
+        `error: invalid container context ${JSON.stringify({
+          env: env,
+          revision: revision,
+          context: context,
+        })}`
+      );
+    }
+  }
+
+  private getNetworkResources(
+    env: string,
+    network: networkConfig
+  ): {
+    vpc: ec2.IVpc;
+    securityGroup: ec2.ISecurityGroup;
+  } {
+    // retrieve vpc by name
+    const vpc: ec2.IVpc = ec2.Vpc.fromLookup(this, "VPC", {
+      vpcId: network.vpcName,
+    });
+
+    const securityGroup: ec2.ISecurityGroup = this.getOrCreateSecurityGroup(
+      env,
+      vpc,
+      network
+    );
+
+    return { vpc, securityGroup };
+  }
+
+  private getOrCreateSecurityGroup(
+    env: string,
+    vpc: ec2.IVpc,
+    network: networkConfig
+  ): ec2.ISecurityGroup {
+    if (network.securityGroup.id) {
+      return ec2.SecurityGroup.fromSecurityGroupId(
+        this,
+        "SecurityGroup",
+        network.securityGroup.id
+      );
+    }
+
+    const securityGroup: ec2.SecurityGroup = new ec2.SecurityGroup(
+      this,
+      "SecurityGroup",
+      {
+        vpc: vpc,
+        securityGroupName: network.securityGroup.name,
+      }
+    );
+
+    securityGroup.addIngressRule(ec2.Peer.ipv4("0.0.0.0/0"), ec2.Port.tcp(80));
+    securityGroup.addIngressRule(
+      ec2.Peer.ipv4("0.0.0.0/0"),
+      ec2.Port.tcp(8080)
+    );
+
+    return securityGroup;
+  }
+
+  private createECS(
+    tag: string,
+    container: containerConfig,
+    vpc: ec2.IVpc,
+    securityGroup: ec2.ISecurityGroup
+  ): ecs.Ec2Service {
+    const cluster: ecs.Cluster = new ecs.Cluster(this, "Cluster", {
+      clusterName: `${this.stackName}`,
+      vpc,
+    });
+
+    cluster.addCapacity("DfaultAutoScalingGroup", {
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO
+      ),
+      machineImage: ecs.EcsOptimizedImage.amazonLinux2(),
+    });
+
+    const taskDefinition: ecs.Ec2TaskDefinition = new ecs.Ec2TaskDefinition(
+      this,
+      `${this.stackName}`,
+      {
+        networkMode: ecs.NetworkMode.BRIDGE,
+      }
+    );
+
+    const image: ecs.ContainerImage = ecs.ContainerImage.fromEcrRepository(
+      ecr.Repository.fromRepositoryName(
+        this,
+        "Repository",
+        container.imageName
+      ),
+      tag
+    );
+
+    taskDefinition
+      .addContainer(container.imageName, {
+        image,
+        memoryLimitMiB: container.memoryLimitMiB,
+        cpu: container.cpu,
+        environment: {
+          APP_ENV: "Demo",
+          TZ: "Asia/Tokyo",
+        },
+        logging: new ecs.AwsLogDriver({
+          streamPrefix: `${this.stackName}`,
+        }),
+      })
+      .addPortMappings({
+        hostPort: container.hostPort,
+        containerPort: container.containerPort,
+      });
+
+    // const securityGroups: ec2.ISecurityGroup[] = [];
+    // securityGroups.push(securityGroup);
+    const ec2Service: ecs.Ec2Service = new ecs.Ec2Service(this, "EC2Service", {
+      serviceName: `${this.stackName}`,
+      cluster,
+      taskDefinition,
+      desiredCount: container.desiredCount,
+      assignPublicIp: true,
+    });
+
+    return ec2Service;
+  }
+
+  private createSecurityGroup(
+    network: networkConfig,
+    vpc: ec2.IVpc
+  ): ec2.SecurityGroup {
+    const securityGroup: ec2.SecurityGroup = new ec2.SecurityGroup(
+      this,
+      network.securityGroup.id,
+      {
+        allowAllOutbound: true,
+        securityGroupName: network.securityGroup.name,
+        vpc,
+      }
+    );
+    securityGroup.addIngressRule(ec2.Peer.ipv4("0.0.0.0/0"), ec2.Port.tcp(80));
+    securityGroup.addIngressRule(ec2.Peer.ipv4("0.0.0.0/0"), ec2.Port.tcp(443));
+    return securityGroup;
+  }
+
+  private createAlb(
+    alb: albConfig,
+    securityGroup: ec2.ISecurityGroup,
+    vpc: ec2.IVpc
+  ): elbv2.ApplicationLoadBalancer {
+    return new elbv2.ApplicationLoadBalancer(this, alb.id, {
+      internetFacing: true,
+      loadBalancerName: alb.name,
+      securityGroup: securityGroup,
+      vpc,
+      vpcSubnets: { subnets: vpc.publicSubnets },
+    });
+  }
+
+  private addListener(
+    alb: elbv2.ApplicationLoadBalancer,
+    listener: listenerConfig,
+    targetGroup: targetGroupConfig,
+    container: containerConfig,
+    ec2Service: ecs.Ec2Service
+  ): void {
+    const httpListener: elbv2.ApplicationListener = alb.addListener(
+      listener.http.id,
+      {
+        port: listener.http.port,
+        open: true,
+      }
+    );
+
+    httpListener.addTargets("ECS", {
+      port: targetGroup.port,
+      targets: [
+        ec2Service.loadBalancerTarget({
+          containerName: container.imageName,
+          containerPort: container.containerPort,
+        }),
+      ],
+      healthCheck: {
+        interval: cdk.Duration.seconds(60),
+        path: "/",
+        timeout: cdk.Duration.seconds(5),
+      },
+    });
+
+    const httpsListener: elbv2.ApplicationListener = alb.addListener(
+      listener.https.id,
+      {
+        port: listener.https.port,
+        open: true,
+        certificates: [
+          {
+            certificateArn: listener.https.certificateArn,
+          },
+        ],
+      }
+    );
+
+    httpsListener.addTargets("ECS", {
+      port: targetGroup.port,
+      targets: [
+        ec2Service.loadBalancerTarget({
+          containerName: container.imageName,
+          containerPort: container.containerPort,
+        }),
+      ],
+      healthCheck: {
+        interval: cdk.Duration.seconds(60),
+        path: "/",
+        timeout: cdk.Duration.seconds(5),
+      },
+    });
+  }
+
+  private createARecordWithAlb(
+    route53Config: route53Config,
+    alb: elbv2.ApplicationLoadBalancer
+  ): void {
+    new route53.ARecord(this, route53Config.id, {
+      recordName: route53Config.fqdn,
+      target: route53.RecordTarget.fromAlias(
+        new route53Targets.LoadBalancerTarget(alb)
+      ),
+      zone: route53.HostedZone.fromLookup(this, route53Config.hostedZone.id, {
+        domainName: route53Config.hostedZone.domainName,
+      }),
+    });
+  }
+}
