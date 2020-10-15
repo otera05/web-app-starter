@@ -1,0 +1,90 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`Snapshot Test 1`] = `
+Object {
+  "Resources": Object {
+    "igwdemominiapp": Object {
+      "Type": "AWS::EC2::InternetGateway",
+    },
+    "igwdemominiappattachemnt": Object {
+      "Properties": Object {
+        "InternetGatewayId": Object {
+          "Ref": "igwdemominiapp",
+        },
+        "VpcId": Object {
+          "Ref": "vpcdemominiapp9DD3AA91",
+        },
+      },
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+    },
+    "publicsubdemominiappaRouteTableAssociation0008BF4C": Object {
+      "Properties": Object {
+        "RouteTableId": Object {
+          "Ref": "publicsubdemominiappaRouteTableFFBBC5AA",
+        },
+        "SubnetId": Object {
+          "Ref": "publicsubdemominiappaSubnet39559004",
+        },
+      },
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+    },
+    "publicsubdemominiappaRouteTableFFBBC5AA": Object {
+      "Properties": Object {
+        "Tags": Array [
+          Object {
+            "Key": "Name",
+            "Value": "TestStack/public-sub-demo-mini-app-a",
+          },
+        ],
+        "VpcId": Object {
+          "Ref": "vpcdemominiapp9DD3AA91",
+        },
+      },
+      "Type": "AWS::EC2::RouteTable",
+    },
+    "publicsubdemominiappaSubnet39559004": Object {
+      "Properties": Object {
+        "AvailabilityZone": "ap-northeast-1a",
+        "CidrBlock": "10.3.0.0/24",
+        "Tags": Array [
+          Object {
+            "Key": "Name",
+            "Value": "TestStack/public-sub-demo-mini-app-a",
+          },
+        ],
+        "VpcId": Object {
+          "Ref": "vpcdemominiapp9DD3AA91",
+        },
+      },
+      "Type": "AWS::EC2::Subnet",
+    },
+    "publicsubdemominiapparoutedemominiappF88E4C4F": Object {
+      "Properties": Object {
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": Object {
+          "Ref": "igwdemominiapp",
+        },
+        "RouteTableId": Object {
+          "Ref": "publicsubdemominiappaRouteTableFFBBC5AA",
+        },
+      },
+      "Type": "AWS::EC2::Route",
+    },
+    "vpcdemominiapp9DD3AA91": Object {
+      "Properties": Object {
+        "CidrBlock": "10.3.0.0/16",
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "InstanceTenancy": "default",
+        "Tags": Array [
+          Object {
+            "Key": "Name",
+            "Value": "TestStack/vpc-demo-mini-app",
+          },
+        ],
+      },
+      "Type": "AWS::EC2::VPC",
+    },
+  },
+}
+`;
