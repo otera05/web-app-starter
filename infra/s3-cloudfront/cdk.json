@@ -1,0 +1,26 @@
+{
+  "app": "npx ts-node bin/s3-cloudfront.ts",
+  "context": {
+    "Demo": {
+      "description": "Mini App フロント用のエンドポイント",
+      "domainName": "front.otera05.xyz",
+      "s3": {
+        "bucketName": "front.otera05.xyz",
+        "name": "todon-pt_Bucket"
+      },
+      "cloudFront": {
+        "distributionId": "todon-pt_Distribution",
+        "oaiId": "todon-pt_S3",
+        "acmArn": "arn:aws:acm:us-east-1:992664807309:certificate/4309dfd9-570a-4263-bec4-09782737f2b5",
+        "domainName": "front.otera05.xyz"
+      },
+      "route53": {
+        "id": "todon-pt_Route53",
+        "hostedZone": {
+          "id": "otera05.xyz",
+          "domainName": "otera05.xyz."
+        }
+      }
+    }
+  }
+}
